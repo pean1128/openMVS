@@ -40,6 +40,8 @@ using namespace MVS;
 
 #define APPNAME _T("DensifyPointCloud")
 
+#define WITH_POINTCLOUD 0
+
 
 // S T R U C T S ///////////////////////////////////////////////////
 
@@ -260,15 +262,20 @@ int main(int argc, LPCTSTR* argv)
 		Finalize();
 		return EXIT_SUCCESS;
 	}
+
 	// load and estimate a dense point-cloud
 	if (!scene.Load(MAKE_PATH_SAFE(OPT::strInputFileName)))
 		return EXIT_FAILURE;
 	if (!OPT::strMeshFileName.empty())
 		scene.mesh.Load(MAKE_PATH_SAFE(OPT::strMeshFileName));
+	
+#if WITH_POINTCLOUD
 	if (scene.pointcloud.IsEmpty() && OPT::strViewNeighborsFileName.empty() && scene.mesh.IsEmpty()) {
 		VERBOSE("error: empty initial point-cloud");
 		return EXIT_FAILURE;
 	}
+#endif
+	
 	if (OPT::fMaxSubsceneArea > 0) {
 		// split the scene in sub-scenes by maximum sampling area
 		Scene::ImagesChunkArr chunks;
@@ -277,6 +284,7 @@ int main(int argc, LPCTSTR* argv)
 		Finalize();
 		return EXIT_SUCCESS;
 	}
+
 	if (OPT::thFilterPointCloud < 0) {
 		// filter point-cloud based on camera-point visibility intersections
 		scene.PointCloudFilter(OPT::thFilterPointCloud);
@@ -286,6 +294,9 @@ int main(int argc, LPCTSTR* argv)
 		Finalize();
 		return EXIT_SUCCESS;
 	}
+
+
+#if WITH_POINTCLOUD
 	if (OPT::nExportNumViews && scene.pointcloud.IsValid()) {
 		// export point-cloud containing only points with N+ views
 		const String baseFileName(MAKE_PATH_SAFE(Util::getFileFullName(OPT::strOutputFileName)));
@@ -293,6 +304,8 @@ int main(int argc, LPCTSTR* argv)
 		Finalize();
 		return EXIT_SUCCESS;
 	}
+#endif
+
 	if ((ARCHIVE_TYPE)OPT::nArchiveType != ARCHIVE_MVS) {
 		if (!OPT::strViewNeighborsFileName.empty())
 			scene.LoadViewNeighbors(MAKE_PATH_SAFE(OPT::strViewNeighborsFileName));

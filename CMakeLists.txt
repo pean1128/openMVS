@@ -48,6 +48,9 @@ SET(OpenMVS_USE_FAST_CBRT ON CACHE BOOL "Use an optimized code to compute the cu
 SET(OpenMVS_USE_SSE ON CACHE BOOL "Enable SSE optimizations")
 SET(OpenMVS_MAX_CUDA_COMPATIBILITY OFF CACHE BOOL "Build for maximum CUDA device compatibility")
 
+#set(CMAKE_C_COMPILER /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++)
+#set(CMAKE_CXX_COMPILER /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang++)
+
 # Define helper functions and macros.
 INCLUDE(build/Utils.cmake)
 
@@ -60,15 +63,27 @@ ConfigLibrary()
 # Find dependencies:
 SET(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/Modules)
 
+message(${CMAKE_C_COMPILER})
+message(${CMAKE_CXX_COMPILER})
+
 # Find required packages
 SET(OpenMVS_EXTRA_INCLUDES "")
 SET(OpenMVS_DEFINITIONS "")
 SET(OpenMVS_EXTRA_LIBS "")
 
+# find_package(OpenMP)
+# if(OPENMP_FOUND)
+# endif()
+
 if(OpenMVS_USE_OPENMP)
 	SET(OpenMP_LIBS "")
 	FIND_PACKAGE(OpenMP)
+
 	if(OPENMP_FOUND)
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+		set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+
 		SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 		LIST(APPEND OpenMVS_DEFINITIONS -D_USE_OPENMP)
 		SET(_USE_OPENMP TRUE)
@@ -164,6 +179,9 @@ if(OpenMVS_USE_BREAKPAD)
 		MESSAGE("-- Can't find BreakPad. Continuing without it.")
 	endif()
 endif()
+
+
+set(BOOST_ROOT /Users/admin/Documents/Installs/boost_install)
 
 FIND_PACKAGE(Boost COMPONENTS iostreams program_options system serialization REQUIRED)
 if(Boost_FOUND)

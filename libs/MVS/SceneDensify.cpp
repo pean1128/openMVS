@@ -289,6 +289,7 @@ bool DepthMapsData::SelectViews(DepthData& depthData)
 		DEBUG_EXTRA("error: reference image %3u has no good images in view", idxImage);
 		return false;
 	}
+
 	return true;
 } // SelectViews
 /*----------------------------------------------------------------*/
@@ -1320,10 +1321,15 @@ void DepthMapsData::FuseDepthMaps(PointCloud& pointcloud, bool bEstimateColor, b
 
 	// find best connected images
 	IndexScoreArr connections(0, scene.images.GetSize());
+	// std::cerr << scene.images.GetSize() << std::endl;
+	// std::cerr << connections.size() << std::endl;
+	// std::cerr << arrDepthData.size() << std::endl;
+
 	size_t nPointsEstimate(0);
 	bool bNormalMap(true);
 	FOREACH(i, scene.images) {
 		DepthData& depthData = arrDepthData[i];
+
 		if (!depthData.IsValid())
 			continue;
 		if (depthData.IncRef(ComposeDepthFilePath(depthData.GetView().GetID(), "dmap")) == 0)
@@ -1358,6 +1364,8 @@ void DepthMapsData::FuseDepthMaps(PointCloud& pointcloud, bool bEstimateColor, b
 		pointcloud.normals.Reserve(nPointsEstimate);
 	Util::Progress progress(_T("Fused depth-maps"), connections.GetSize());
 	GET_LOGCONSOLE().Pause();
+
+
 	FOREACHPTR(pConnection, connections) {
 		TD_TIMER_STARTD();
 		const uint32_t idxImage(pConnection->idx);
@@ -1565,6 +1573,14 @@ bool Scene::DenseReconstruction(int nFusionMode)
 {
 	DenseDepthMapData data(*this, nFusionMode);
 
+	auto& scene = data.scene;
+	std::cerr << "images size: " << scene.images.size() << std::endl;
+	FOREACH(idxImage, scene.images)
+	{
+		std::cerr << "index: " << idxImage << std::endl;
+		std::cerr << "name: " << scene.images[idxImage].name << std::endl;
+	}
+
 	// estimate depth-maps
 	if (!ComputeDepthMaps(data))
 		return false;
@@ -1717,6 +1733,7 @@ bool Scene::ComputeDepthMaps(DenseDepthMapData& data)
 				invalidIDs.InsertSort(idx);
 			}
 		}
+
 		RFOREACH(i, invalidIDs) {
 			const IIndex idx(invalidIDs[i]);
 			imagesMap[data.images.Last()] = idx;
@@ -1730,6 +1747,8 @@ bool Scene::ComputeDepthMaps(DenseDepthMapData& data)
 		}
 		ASSERT(!data.images.IsEmpty());
 		VERBOSE("Selecting images for dense reconstruction completed: %d images (%s)", data.images.GetSize(), TD_TIMER_GET_FMT().c_str());
+
+		//exit(-1);
 	}
 	}
 
@@ -1751,6 +1770,7 @@ bool Scene::ComputeDepthMaps(DenseDepthMapData& data)
 	// start working threads
 	data.progress = new Util::Progress("Estimated depth-maps", data.images.GetSize());
 	GET_LOGCONSOLE().Pause();
+	
 	if (nMaxThreads > 1) {
 		// multi-thread execution
 		cList<SEACAVE::Thread> threads(2);
@@ -1762,10 +1782,14 @@ bool Scene::ComputeDepthMaps(DenseDepthMapData& data)
 		// single-thread execution
 		DenseReconstructionEstimate((void*)&data);
 	}
+
 	GET_LOGCONSOLE().Play();
 	if (!data.events.IsEmpty())
 		return false;
 	data.progress.Release();
+
+	std::cerr << data.images.GetSize() << std::endl;
+	//exit(-1);
 
 	if (data.nFusionMode >= 0) {
 		#ifdef _USE_CUDA
@@ -1869,6 +1893,9 @@ void Scene::DenseReconstructionEstimate(void* pData)
 			const IIndex idx = data.images[evtImage.idxImage];
 			DepthData& depthData(data.depthMaps.arrDepthData[idx]);
 			const bool depthmapComputed(data.nFusionMode < 0 || (data.nFusionMode >= 0 && data.nEstimationGeometricIter < 0 && File::access(ComposeDepthFilePath(data.scene.images[idx].ID, "dmap"))));
+			
+			std::cerr << "try to load already compute depth-map " << depthmapComputed << std::endl;
+
 			// initialize images pair: reference image and the best neighbor view
 			ASSERT(data.neighborsMap.IsEmpty() || data.neighborsMap[evtImage.idxImage] != NO_ID);
 			if (!data.depthMaps.InitViews(depthData, data.neighborsMap.IsEmpty()?NO_ID:data.neighborsMap[evtImage.idxImage], OPTDENSE::nNumViews, !depthmapComputed, depthmapComputed ? -1 : (data.nEstimationGeometricIter >= 0 ? 1 : 0))) {

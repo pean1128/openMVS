@@ -62,8 +62,10 @@
 #include <cmath>
 #include <ctime>
 #include <random>
+
 #ifdef _USE_OPENMP
-#include <omp.h>
+//#include <omp.h>
+#include "/usr/local/opt/libomp/include/omp.h"
 #endif
 
 // Function delegate functionality

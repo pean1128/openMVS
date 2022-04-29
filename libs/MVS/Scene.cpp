@@ -665,17 +665,23 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 	unsigned nPoints = 0;
 	imageData.avgDepth = 0;
 	const float sigmaAngle(-1.f/(2.f*SQUARE(fOptimAngle*1.3f)));
+
 	FOREACH(idx, pointcloud.points) {
 		const PointCloud::ViewArr& views = pointcloud.pointViews[idx];
 		ASSERT(views.IsSorted());
+
+		//  如果views里面能找到ID
 		if (views.FindFirst(ID) == PointCloud::ViewArr::NO_INDEX)
 			continue;
+
 		// store this point
 		const PointCloud::Point& point = pointcloud.points[idx];
 		if (views.GetSize() >= nMinPointViews)
 			points.Insert((uint32_t)idx);
+
 		imageData.avgDepth += (float)imageData.camera.PointDepth(point);
 		++nPoints;
+		
 		// score shared views
 		const Point3f V1(imageData.camera.C - Cast<REAL>(point));
 		const float footprint1(Footprint(imageData.camera, point));
@@ -755,8 +761,9 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		VERBOSE("Reference image %3u sees %u views:%s (%u shared points)", ID, neighbors.GetSize(), msg.c_str(), nPoints);
 	}
 	#endif
-	if (points.GetSize() <= 3 || neighbors.GetSize() < MINF(nMinViews,nCalibratedImages-1)) {
+	if (points.GetSize() <= 3 || neighbors.GetSize() < MINF(nMinViews, nCalibratedImages-1)) {
 		DEBUG_EXTRA("error: reference image %3u has not enough images in view", ID);
+		DEBUG_EXTRA("due to points size %3u, neighbors size %3u", points.GetSize(), neighbors.GetSize());
 		return false;
 	}
 	return true;
@@ -767,13 +774,36 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 bool Scene::FilterNeighborViews(ViewScoreArr& neighbors, float fMinArea, float fMinScale, float fMaxScale, float fMinAngle, float fMaxAngle, unsigned nMaxViews)
 {
 	// remove invalid neighbor views
+	static int cons_1 = 0;
+	static int cons_2 = 0;
+	static int cons_3 = 0;
+
 	RFOREACH(n, neighbors) {
 		const ViewScore& neighbor = neighbors[n];
+		
+		if (neighbor.idx.area < fMinArea)
+		{
+			cons_1++;
+		}
+
+		if (!ISINSIDE(neighbor.idx.scale, fMinScale, fMaxScale))
+		{
+			cons_2++;
+		}
+
+		if (!ISINSIDE(neighbor.idx.angle, fMinAngle, fMaxAngle))
+		{
+			cons_3++;
+		}
+
 		if (neighbor.idx.area < fMinArea ||
 			!ISINSIDE(neighbor.idx.scale, fMinScale, fMaxScale) ||
 			!ISINSIDE(neighbor.idx.angle, fMinAngle, fMaxAngle))
 			neighbors.RemoveAtMove(n);
 	}
+
+	std::cerr << cons_1 << " " << cons_2 << " " << cons_3 << std::endl;
+
 	if (neighbors.GetSize() > nMaxViews)
 		neighbors.Resize(nMaxViews);
 	return !neighbors.IsEmpty();

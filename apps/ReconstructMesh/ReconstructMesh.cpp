@@ -336,6 +336,75 @@ int main(int argc, LPCTSTR* argv)
 	// load project
 	if (!scene.Load(MAKE_PATH_SAFE(OPT::strInputFileName), OPT::fSplitMaxArea > 0 || OPT::fDecimateMesh < 1 || OPT::nTargetFaceNum > 0))
 		return EXIT_FAILURE;
+
+	/* Print Debug Info */
+	//std::cerr << scene.platforms.size() << std::endl;
+	//std::cerr << scene.platforms[0].size() << std::endl;
+	std::cerr << "print images info of scene: " << std::endl;
+	std::cerr << "nCalibratedImages of scene: " << scene.nCalibratedImages << std::endl; // 10
+	std::cerr << "nMaxThreads of scene: " <<  scene.nMaxThreads << std::endl; // 12
+	
+	std::cerr << "images size: " << scene.images.size() << std::endl;
+	FOREACH(idxImage, scene.images)
+	{
+		std::cerr << "index: " << idxImage << std::endl;
+		std::cerr << "name: " << scene.images[idxImage].name << std::endl;
+		std::cerr << "mask name: " << scene.images[idxImage].maskName << std::endl;
+		std::cerr << "platform id: " << scene.images[idxImage].platformID << std::endl;
+		std::cerr << "camera id: " << scene.images[idxImage].cameraID << std::endl;
+		std::cerr << "pose id: " << scene.images[idxImage].poseID << std::endl;
+		std::cerr << "global id: " << scene.images[idxImage].ID << std::endl;
+		std::cerr << "image width: " << scene.images[idxImage].width << std::endl;
+		std::cerr << "image height: " << scene.images[idxImage].height << std::endl;
+		std::cerr << "image buffer: " << scene.images[idxImage].image.size() << std::endl;
+		std::cerr << "image neighbor: " << scene.images[idxImage].neighbors.size() << std::endl;
+		std::cerr << "image scale: " << scene.images[idxImage].scale << std::endl;
+		std::cerr << "image avgDepth: " << scene.images[idxImage].avgDepth << std::endl;
+
+		std::cerr << "camera intrinsic matrix:\n" << scene.images[idxImage].camera.K << std::endl;
+		std::cerr << "camera rotation matrix:\n" << scene.images[idxImage].camera.R << std::endl;
+		std::cerr << "camera center:\n" << scene.images[idxImage].camera.C << std::endl;
+		std::cerr << "camera projection matrix:\n" << scene.images[idxImage].camera.P << std::endl;
+	
+		//if (idxImage > 1) 
+		break;
+	}
+
+	std::cerr << std::endl;
+	std::cerr << "platforms size: " << scene.platforms.size() << std::endl;
+	FOREACH(idxPlatform, scene.platforms)
+	{
+		std::cerr << "index: " << idxPlatform << std::endl;
+		std::cerr << "name: " << scene.platforms[idxPlatform].name << std::endl;
+		std::cerr << "cameras size: " << scene.platforms[idxPlatform].cameras.size() << std::endl;
+		std::cerr << "camera intrinsic matrix:\n" << scene.platforms[idxPlatform].cameras[0].K << std::endl;
+		std::cerr << "camera rotation matrix:\n" << scene.platforms[idxPlatform].cameras[0].R << std::endl;
+		std::cerr << "camera center:\n" << scene.platforms[idxPlatform].cameras[0].C << std::endl;
+
+		std::cerr << "poses size: " << scene.platforms[idxPlatform].poses.size() << std::endl;
+		std::cerr << "poses rotation matrix:\n" << scene.platforms[idxPlatform].poses[0].R << std::endl;
+		std::cerr << "poses center:\n" << scene.platforms[idxPlatform].poses[0].C << std::endl;
+	
+		break;
+	}
+
+	std::cerr << std::endl;
+	std::cerr << "pointcloud size: " << scene.pointcloud.points.size() << " " << scene.pointcloud.points[0] << std::endl;
+	std::cerr << "pointViews size: " << scene.pointcloud.pointViews.size() << " " << scene.pointcloud.pointViews[0].size() << std::endl;
+	std::cerr << scene.pointcloud.pointViews[0][0] << " " << scene.pointcloud.pointViews[0][1] << " " 
+				<< scene.pointcloud.pointViews[0][2] << " " << scene.pointcloud.pointViews[0][3] << std::endl;
+	std::cerr << "pointWeights size: " << scene.pointcloud.pointWeights.size() << " " << scene.pointcloud.pointWeights[0].size() << std::endl;
+	std::cerr << scene.pointcloud.pointWeights[0][0] << " " << scene.pointcloud.pointWeights[0][1] << " "
+				<< scene.pointcloud.pointWeights[0][2] << " " << scene.pointcloud.pointWeights[0][3] << std::endl;
+	std::cerr << "normals size: " << scene.pointcloud.normals.size() << " " << scene.pointcloud.normals[0] << std::endl;
+	//scene.pointcloud.normals.clear();
+	std::cerr << "colors size: " << scene.pointcloud.colors.size() << std::endl;
+	std::cerr << static_cast<int>(scene.pointcloud.colors[0][0]) << " " 
+				<< static_cast<int>(scene.pointcloud.colors[0][1]) << " " 
+					<< static_cast<int>(scene.pointcloud.colors[0][2]) << std::endl;
+
+	//exit(-1);
+
 	const String baseFileName(MAKE_PATH_SAFE(Util::getFileFullName(OPT::strOutputFileName)));
 	if (OPT::fSplitMaxArea > 0) {
 		// split mesh using max-area constraint
@@ -397,6 +466,7 @@ int main(int argc, LPCTSTR* argv)
 					scene.SelectNeighborViews(idxImage, points);
 				}
 			}
+
 			#ifdef RECMESH_USE_OPENMP
 			if (bAbort)
 				return EXIT_FAILURE;

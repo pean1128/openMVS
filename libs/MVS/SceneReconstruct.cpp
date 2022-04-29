@@ -771,6 +771,7 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, unsigne
 							float kInf
 )
 {
+	/* variable of instance : pointcloud, images */
 	using namespace DELAUNAY;
 	ASSERT(!pointcloud.IsEmpty());
 	mesh.Release();
@@ -788,22 +789,26 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, unsigne
 		// fetch points
 		FOREACH(i, pointcloud.points) {
 			const PointCloud::Point& X(pointcloud.points[i]);
-			vertices[i] = point_t(X.x, X.y, X.z);
-			indices[i] = i;
+			vertices[i] = point_t(X.x, X.y, X.z); // assign the vertices of point cloud
+			indices[i] = i; // indice of point
 		}
+
 		// sort vertices
 		typedef CGAL::Spatial_sort_traits_adapter_3<delaunay_t::Geom_traits, point_t*> Search_traits;
 		CGAL::spatial_sort(indices.begin(), indices.end(), Search_traits(&vertices[0], delaunay.geom_traits()));
+
 		// insert vertices
 		Util::Progress progress(_T("Points inserted"), indices.size());
 		const float distInsertSq(SQUARE(distInsert));
 		vertex_handle_t hint;
 		delaunay_t::Locate_type lt;
 		int li, lj;
+
+		// indices after sorting
 		std::for_each(indices.cbegin(), indices.cend(), [&](size_t idx) {
 			const point_t& p = vertices[idx];
 			const PointCloud::Point& point = pointcloud.points[idx];
-			const PointCloud::ViewArr& views = pointcloud.pointViews[idx];
+			const PointCloud::ViewArr& views = pointcloud.pointViews[idx]; // view of point cloud
 			ASSERT(!views.IsEmpty());
 			if (hint == vertex_handle_t()) {
 				// this is the first point,
@@ -847,8 +852,10 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, unsigne
 								break;
 						}
 					}
+					
 					ASSERT(nearest == delaunay.nearest_vertex(p, hint->cell()));
 					hint = nearest;
+
 					// check if point is far enough to all existing points
 					FOREACHPTR(pViewID, views) {
 						const Image& imageData = images[*pViewID];
@@ -870,6 +877,7 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, unsigne
 		});
 		progress.close();
 		pointcloud.Release();
+
 		// init cells weights and
 		// loop over all cells and store the finite facet of the infinite cells
 		const size_t numNodes(delaunay.number_of_cells());
@@ -891,6 +899,7 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, unsigne
 				}
 			}
 		}
+		
 		// find all cells containing a camera
 		camCells.resize(images.GetSize());
 		FOREACH(i, images) {
