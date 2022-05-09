@@ -31,10 +31,13 @@
 
 #include "../../libs/MVS/Common.h"
 #include "../../libs/MVS/Scene.h"
+#include "../../libs/IO/json.hpp"
 #include <boost/program_options.hpp>
 
-using namespace MVS;
+#define READ_ACMM_DATA 0
 
+using namespace MVS;
+using json = nlohmann::json;
 
 // D E F I N E S ///////////////////////////////////////////////////
 
@@ -75,6 +78,191 @@ String strExportType;
 String strConfigFileName;
 boost::program_options::variables_map vm;
 } // namespace OPT
+
+bool ReadPlyAsPointCloud(
+	const std::string& filename, 
+	PointCloud& pointcloud)
+{
+    if (0 != access(filename.c_str(), F_OK)) {
+        printf("file %s not exists", filename.c_str());
+        return false;
+    }
+
+    std::ifstream f(filename);
+    std::string line;
+
+    std::getline(f, line);
+    if (line != "ply") {
+        printf("file format is invalid");
+        f.close();
+        return false;
+    }
+
+    std::getline(f, line);
+    if (line != "format ascii 1.0") {
+        printf("ply format should be ascii");
+        f.close();
+        return false;
+    }
+
+    std::getline(f, line);
+	if (line.rfind("comment VCGLIB generated") == 0) {
+    	std::getline(f, line);
+	}
+
+    int vertex_count = 0;
+    if (line.rfind("element vertex") == 0) {
+        vertex_count = std::stoi(line.substr(15));
+    }
+
+	/*
+		property float x
+		property float y
+		property float z
+		property float nx
+		property float ny
+		property float nz
+		property uchar red
+		property uchar green
+		property uchar blue
+		(property uchar alpha)
+	*/
+	int idx = 0;
+	bool finalize = false;
+	for (int i = 0; i < 12; ++i) {
+		std::getline(f, line);
+
+		if (line.rfind("element face") == 0) {
+			idx = i;
+			break;
+		} else if (line.rfind("end_header") == 0) {
+			idx = i;
+			finalize = true;
+			break;
+		}
+	}
+
+	if (!finalize)
+	{
+		std::getline(f, line);
+		std::getline(f, line);
+
+		if (line.rfind("end_header") != 0) {
+			printf("[ReadPlyAsPointCloud] read point cloud file fail\n");
+			f.close();
+			exit(EXIT_FAILURE);
+		}
+	}
+    
+    while (std::getline(f, line)) 
+	{
+        std::stringstream ss(line);
+
+        std::vector<std::string> line_buf;
+        std::for_each(
+            std::istream_iterator<std::string>(ss), 
+            std::istream_iterator<std::string>(), 
+            [&](std::string const& word) 
+			{ 
+				line_buf.emplace_back(word);
+			}
+        );
+
+		if (line_buf.size() == 10) 
+		{
+			PointCloud::Point& point = pointcloud.points.AddEmpty();
+			point[0] = std::stof(line_buf[0]), 
+			point[1] = std::stof(line_buf[1]), 
+			point[2] = std::stof(line_buf[2]);
+
+			// PointCloud::ViewArr& point_view = pointcloud.pointViews.AddEmpty();
+			// point_view.Resize(1);
+			// point_view[0] = view_id;
+
+			// PointCloud::WeightArr& point_weight = pointcloud.pointWeights.AddEmpty();
+			// point_weight.Resize(1);
+			// point_weight[0] = 1.0;
+		} 
+		else if (line_buf.size() == 9) 
+		{
+			PointCloud::Point& point = pointcloud.points.AddEmpty();
+			point[0] = std::stof(line_buf[0]), 
+			point[1] = std::stof(line_buf[1]), 
+			point[2] = std::stof(line_buf[2]);
+
+			// std::cerr << point[0] << " " << point[1] << " " << point[2] << std::endl;
+			// exit(-1);
+		} 
+		else 
+		{
+			std::cerr << line << std::endl;
+			exit(EXIT_FAILURE);
+		}
+    }
+    f.close();
+
+	ASSERT(pointcloud.points.size() == vertex_count);
+
+    printf("vertice size of pointcloud: %lu", pointcloud.points.size());
+    return true;
+}
+
+bool ReadPointCloudDetails(
+	const std::string& filename, 
+	Scene& scene)
+{
+	std::ifstream fin(filename);
+    if (!fin.is_open())
+    {
+        printf("%s can not open", filename.c_str());
+        return false;
+    }
+
+    json pcd_details = json::parse(fin);
+    auto view_amount = pcd_details["depth_view_details"]["amount"].get<int>();
+    auto average_depths = pcd_details["depth_view_details"]["average_depth"].get<std::vector<float>>(); 
+
+	std::cerr << view_amount << std::endl;
+	std::cerr << average_depths.size() << std::endl;
+	ASSERT(view_amount == scene.images.size());
+
+	for (int i = 0; i < view_amount; i++)
+	{
+		scene.images[i].avgDepth = average_depths[i];
+	}
+	std::vector<float>().swap(average_depths);
+
+    auto pcd_amount = pcd_details["point_cloud_details"]["amount"].get<int>();
+	auto joint_view_ids = pcd_details["point_cloud_details"]["joint_view_ids"].get<std::vector<std::vector<int>>>(); 
+
+	ASSERT(pcd_amount == scene.pointcloud.points.size());
+
+	for (int i = 0; i < pcd_amount; i++)
+	{
+		PointCloud::ViewArr& point_view = scene.pointcloud.pointViews.AddEmpty();
+		point_view.Resize(joint_view_ids[i].size());
+
+		PointCloud::WeightArr& point_weight = scene.pointcloud.pointWeights.AddEmpty();
+		point_weight.Resize(joint_view_ids[i].size());
+
+		if (joint_view_ids[i].size() < 1)
+		{
+			printf("warning: receive empty joint_view_ids\n");
+		}
+
+		for (int j = 0; j < joint_view_ids[i].size(); j++)
+		{
+			point_view[j] = joint_view_ids[i][j];
+			point_weight[j] = 1.0;
+		}
+	}
+
+	std::vector<std::vector<int>>().swap(joint_view_ids);
+
+	fin.close(); 
+
+	return true;
+}
 
 void AppendPointCloudFromDepthImage(
 	const cv::Mat &depth,
@@ -158,7 +346,7 @@ bool GetFilesUsingSuffix(
 
 bool ExportSceneFromKeplerData(
 	const std::string& root_dir, 
-	Scene& scene)
+	Scene& scene, bool only_load_camera = false)
 {
 	std::vector<std::string> rgb_paths;
 	std::vector<std::string> depth_paths;
@@ -191,10 +379,14 @@ bool ExportSceneFromKeplerData(
 		imageData.ReloadImage(0, false);
 		imageData.scale = 0.f;
 		
-		const cv::Mat& depth = cv::imread(depth_paths[i], cv::ImreadModes::IMREAD_ANYDEPTH);
-		cv::Scalar mean_depth = cv::mean(depth, depth > 0);
-		static_cast<float>(mean_depth.val[0]) / 1000.f;
-		imageData.avgDepth = static_cast<float>(mean_depth.val[0]) / 1000.f;
+		cv::Mat depth;
+		if (!only_load_camera)
+		{
+			depth = cv::imread(depth_paths[i], cv::ImreadModes::IMREAD_ANYDEPTH);
+			cv::Scalar mean_depth = cv::mean(depth, depth > 0);
+			static_cast<float>(mean_depth.val[0]) / 1000.f;
+			imageData.avgDepth = static_cast<float>(mean_depth.val[0]) / 1000.f;
+		}
 
 		// ViewScore& neighbor = imageData.neighbors.AddEmpty();
 		std::cerr << imageData.name << std::endl;
@@ -261,14 +453,17 @@ bool ExportSceneFromKeplerData(
 			std::cerr << imageData.camera.C << std::endl;
 			std::cerr << imageData.camera.P << std::endl;
 
-			std::cerr << "[ExportSceneFromKeplerData] old point cloud size >> " << scene.pointcloud.points.size() << std::endl;
-			AppendPointCloudFromDepthImage(
-				depth, 
-				K, R, C, 
-				1000.f, 0.4f, 3.5f, 16, i, 
-				scene.pointcloud); 
+			if (!only_load_camera)
+			{
+				std::cerr << "[ExportSceneFromKeplerData] old point cloud size >> " << scene.pointcloud.points.size() << std::endl;
+				AppendPointCloudFromDepthImage(
+					depth, 
+					K, R, C, 
+					1000.f, 0.4f, 3.5f, 2, i, 
+					scene.pointcloud); 
 
-			std::cerr << "[ExportSceneFromKeplerData] new point cloud size >> " << scene.pointcloud.points.size() << std::endl;
+				std::cerr << "[ExportSceneFromKeplerData] new point cloud size >> " << scene.pointcloud.points.size() << std::endl;
+			}
 		}
 
 		fin.close();
@@ -302,7 +497,6 @@ bool ExportSceneFromKeplerData(
 
 		std::cerr << poseData.R << "\n" << imageData.camera.R << std::endl;
 		std::cerr << poseData.C << "\n" << imageData.camera.C << std::endl;
-
 		// break;
 	}
 	//exit(-1);
@@ -350,10 +544,10 @@ bool ExportSceneFromBytedanceData(
 	std::vector<std::string> depth_paths;
 	std::vector<std::string> camera_paths;
 	GetFilesUsingSuffix(rgb_dir, ".jpg", rgb_paths);
-	GetFilesUsingSuffix(depth_dir, ".bin", depth_paths);
+	//GetFilesUsingSuffix(depth_dir, ".bin", depth_paths);
 	GetFilesUsingSuffix(camera_dir, ".txt", camera_paths);
 
-	ASSERT(rgb_paths.size() == depth_paths.size());
+	//ASSERT(rgb_paths.size() == depth_paths.size());
 	ASSERT(rgb_paths.size() == camera_paths.size());
 
 	int view_num = static_cast<int>(rgb_paths.size());
@@ -365,9 +559,9 @@ bool ExportSceneFromBytedanceData(
 	
 	for (int i = 0; i < view_num; i++)
 	{
-		std::cerr << "[ExportSceneFromKeplerData] view id >> " << view_num << std::endl;
+		std::cerr << "[ExportSceneFromBytedanceData] view id >> " << view_num << std::endl;
 		std::cerr << ">> " << rgb_paths[i] << std::endl;
-		std::cerr << ">> " << depth_paths[i] << std::endl;
+		//depth_pathsstd::cerr << ">> " << depth_paths[i] << std::endl;
 		std::cerr << ">> " << camera_paths[i] << std::endl;
 
 		Image& imageData = scene.images.AddEmpty();
@@ -380,6 +574,7 @@ bool ExportSceneFromBytedanceData(
 		imageData.ReloadImage(0, false);
 		imageData.scale = 0.f;
 
+#if READ_COLMAP_DATA
 		std::vector<char> depth_data;
 		size_t depth_width, depth_height, depth_depth;
 		ReadBinaryDepth<float>(depth_paths[i], depth_width, depth_height, depth_depth, depth_data);
@@ -391,6 +586,7 @@ bool ExportSceneFromBytedanceData(
 		imageData.avgDepth = static_cast<float>(mean_depth.val[0]) / 1000.f;
 		std::cerr << imageData.avgDepth << std::endl;
 		//cv::imwrite("test.png", depth_map);
+#endif
 
 		// ViewScore& neighbor = imageData.neighbors.AddEmpty();
 		std::cerr << imageData.name << std::endl;
@@ -459,14 +655,16 @@ bool ExportSceneFromBytedanceData(
 			imageData.camera.K = K.cast<double>();
 			std::cerr << imageData.camera.K << std::endl;
 
-			std::cerr << "[ExportSceneFromKeplerData] old point cloud size >> " << scene.pointcloud.points.size() << std::endl;
+#if READ_COLMAP_DARA
+			std::cerr << "[ExportSceneFromBytedanceData] old point cloud size >> " << scene.pointcloud.points.size() << std::endl;
 			AppendPointCloudFromDepthImage(
 				depth, 
 				K, R, C, 
 				1000.f, 0.4f, 3.5f, 2, i, 
 				scene.pointcloud); 
 
-			std::cerr << "[ExportSceneFromKeplerData] new point cloud size >> " << scene.pointcloud.points.size() << std::endl;
+			std::cerr << "[ExportSceneFromBytedanceData] new point cloud size >> " << scene.pointcloud.points.size() << std::endl;
+#endif
 		}
 
 		fin.close();
@@ -665,17 +863,21 @@ int main(int argc, LPCTSTR* argv)
 	// if (!scene.Load(MAKE_PATH_SAFE(OPT::strInputFileName), OPT::fSplitMaxArea > 0 || OPT::fDecimateMesh < 1 || OPT::nTargetFaceNum > 0))
 	// 	return EXIT_FAILURE;
 
+// 	std::string rgb_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/images/";
+// 	std::string depth_dir = "/Users/admin/Downloads/depth_maps/";
+// 	std::string camera_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/cams/";
+// 	ExportSceneFromBytedanceData(rgb_dir, depth_dir, camera_dir, scene);
 
-	std::string rgb_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/images/";
-	std::string depth_dir = "/Users/admin/Downloads/depth_maps/";
-	std::string camera_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/cams/";
-	ExportSceneFromBytedanceData(rgb_dir, depth_dir, camera_dir, scene);
-	//exit(-1);
+// #if READ_ACMM_DATA
+// 	ReadPlyAsPointCloud("/Users/admin/Downloads/ACMMP_model.ply", scene.pointcloud);
+// 	ReadPointCloudDetails("/Users/admin/Downloads/index.json", scene);
+// #endif
 
+	ExportSceneFromKeplerData(
+		"/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_openmvs/", scene, true);
 
-	// ExportSceneFromKeplerData(
-	// 	"/Users/admin/Documents/Projects/Internal/ReconLibrary/build/openmvs_temp/", 
-	// 	scene);
+	ReadPlyAsPointCloud("/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_temp/fusion_api_1.ply", scene.pointcloud);
+	ReadPointCloudDetails("/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_temp/point_view_1.json", scene);
 	
 	// return EXIT_SUCCESS;
 
@@ -712,7 +914,7 @@ int main(int argc, LPCTSTR* argv)
 			// select neighbor views
 			if (imageData.neighbors.IsEmpty()) {
 				IndexArr points;
-				scene.SelectNeighborViews(idxImage, points);
+				scene.SelectNeighborViews(idxImage, points, 1, 1);
 			}
 		}
 

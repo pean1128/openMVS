@@ -911,6 +911,7 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, bool bU
 			const Image& imageData = images[i];
 			if (!imageData.IsValid())
 				continue;
+
 			const Camera& camera = imageData.camera;
 			camera_cell_t& camCell = camCells[i];
 			camCell.cell = delaunay.locate(MVS2CGAL(camera.C));

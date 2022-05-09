@@ -398,6 +398,9 @@ int main(int argc, LPCTSTR* argv)
 	std::cerr << std::endl;
 	std::cerr << "pointcloud size: " << scene.pointcloud.points.size() << " " << scene.pointcloud.points[0] << std::endl;
 	std::cerr << "pointViews size: " << scene.pointcloud.pointViews.size() << " " << scene.pointcloud.pointViews[0].size() << std::endl;
+	std::cerr << scene.pointcloud.pointViews[1].size() << std::endl;
+	std::cerr << scene.pointcloud.pointViews[2].size() << std::endl;
+	std::cerr << scene.pointcloud.pointViews[3].size() << std::endl;
 	std::cerr << scene.pointcloud.pointViews[0][0] << " " << scene.pointcloud.pointViews[0][1] << " " 
 				<< scene.pointcloud.pointViews[0][2] << " " << scene.pointcloud.pointViews[0][3] << std::endl;
 	std::cerr << "pointWeights size: " << scene.pointcloud.pointWeights.size() << " " << scene.pointcloud.pointWeights[0].size() << std::endl;
@@ -410,7 +413,7 @@ int main(int argc, LPCTSTR* argv)
 				<< static_cast<int>(scene.pointcloud.colors[0][1]) << " " 
 					<< static_cast<int>(scene.pointcloud.colors[0][2]) << std::endl;
 
-	//exit(-1);
+	exit(-1);
 
 	const String baseFileName(MAKE_PATH_SAFE(Util::getFileFullName(OPT::strOutputFileName)));
 	if (OPT::fSplitMaxArea > 0) {

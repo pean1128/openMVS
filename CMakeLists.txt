@@ -75,6 +75,8 @@ SET(OpenMVS_EXTRA_LIBS "")
 # if(OPENMP_FOUND)
 # endif()
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer -O1")
+
 if(OpenMVS_USE_OPENMP)
 	SET(OpenMP_LIBS "")
 	FIND_PACKAGE(OpenMP)
