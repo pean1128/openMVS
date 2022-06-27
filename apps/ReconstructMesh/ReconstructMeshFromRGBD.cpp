@@ -59,6 +59,7 @@ String strOutputFileName;
 String strMeshFileName;
 bool bMeshExport;
 float fDistInsert;
+bool bUseOnlyROI;
 bool bUseConstantWeight;
 bool bUseFreeSpaceSupport;
 float fThicknessFactor;
@@ -189,9 +190,6 @@ bool ReadPlyAsPointCloud(
 			point[0] = std::stof(line_buf[0]), 
 			point[1] = std::stof(line_buf[1]), 
 			point[2] = std::stof(line_buf[2]);
-
-			// std::cerr << point[0] << " " << point[1] << " " << point[2] << std::endl;
-			// exit(-1);
 		} 
 		else 
 		{
@@ -655,7 +653,7 @@ bool ExportSceneFromBytedanceData(
 			imageData.camera.K = K.cast<double>();
 			std::cerr << imageData.camera.K << std::endl;
 
-#if READ_COLMAP_DARA
+#if READ_COLMAP_DATA
 			std::cerr << "[ExportSceneFromBytedanceData] old point cloud size >> " << scene.pointcloud.points.size() << std::endl;
 			AppendPointCloudFromDepthImage(
 				depth, 
@@ -863,21 +861,20 @@ int main(int argc, LPCTSTR* argv)
 	// if (!scene.Load(MAKE_PATH_SAFE(OPT::strInputFileName), OPT::fSplitMaxArea > 0 || OPT::fDecimateMesh < 1 || OPT::nTargetFaceNum > 0))
 	// 	return EXIT_FAILURE;
 
-// 	std::string rgb_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/images/";
-// 	std::string depth_dir = "/Users/admin/Downloads/depth_maps/";
-// 	std::string camera_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/cams/";
-// 	ExportSceneFromBytedanceData(rgb_dir, depth_dir, camera_dir, scene);
 
-// #if READ_ACMM_DATA
-// 	ReadPlyAsPointCloud("/Users/admin/Downloads/ACMMP_model.ply", scene.pointcloud);
-// 	ReadPointCloudDetails("/Users/admin/Downloads/index.json", scene);
-// #endif
-
+#if READ_ACMM_DATA
+	std::string rgb_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/images/";
+	std::string depth_dir = "/Users/admin/Downloads/depth_maps/";
+	std::string camera_dir = "/Users/admin/Documents/Projects/Internal/LargeSceneReconstruction/mvs/python/output_0328/acmm/cams/";
+	ExportSceneFromBytedanceData(rgb_dir, depth_dir, camera_dir, scene);
+	ReadPlyAsPointCloud("/Users/admin/Downloads/inlier_pcd.ply", scene.pointcloud);
+	ReadPointCloudDetails("/Users/admin/Downloads/inlier_index.json", scene);
+#else
 	ExportSceneFromKeplerData(
-		"/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_openmvs/", scene, true);
-
-	ReadPlyAsPointCloud("/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_temp/fusion_api_1.ply", scene.pointcloud);
-	ReadPointCloudDetails("/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_temp/point_view_1.json", scene);
+		"/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_openmvs/", scene, false);
+	//ReadPlyAsPointCloud("/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_temp/fusion_api_1.ply", scene.pointcloud);
+	//ReadPointCloudDetails("/Users/admin/Documents/Projects/Internal/ReconLibrary/build/7081932335616147493_temp/point_view_1.json", scene);
+#endif
 	
 	// return EXIT_SUCCESS;
 
@@ -914,7 +911,7 @@ int main(int argc, LPCTSTR* argv)
 			// select neighbor views
 			if (imageData.neighbors.IsEmpty()) {
 				IndexArr points;
-				scene.SelectNeighborViews(idxImage, points, 1, 1);
+				scene.SelectNeighborViews(idxImage, points);
 			}
 		}
 
@@ -926,7 +923,7 @@ int main(int argc, LPCTSTR* argv)
 		TD_TIMER_START();
 		if (OPT::bUseConstantWeight)
 			scene.pointcloud.pointWeights.Release();
-		if (!scene.ReconstructMesh(OPT::fDistInsert, OPT::bUseFreeSpaceSupport, 4, OPT::fThicknessFactor, OPT::fQualityFactor))
+		if (!scene.ReconstructMesh(OPT::fDistInsert, OPT::bUseFreeSpaceSupport, OPT::bUseOnlyROI, 4, OPT::fThicknessFactor, OPT::fQualityFactor))
 			return EXIT_FAILURE;
 		VERBOSE("Mesh reconstruction completed: %u vertices, %u faces (%s)", scene.mesh.vertices.GetSize(), scene.mesh.faces.GetSize(), TD_TIMER_GET_FMT().c_str());
 		#if TD_VERBOSE != TD_VERBOSE_OFF

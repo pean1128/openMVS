@@ -785,6 +785,7 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, bool bU
 		TD_TIMER_STARTD();
 
 		std::vector<point_t> vertices(pointcloud.points.GetSize());
+
 		std::vector<std::ptrdiff_t> indices(pointcloud.points.GetSize());
 		// fetch points
 		if (bUseOnlyROI && !IsBounded())
@@ -955,8 +956,11 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, bool bU
 			#pragma omp critical
 			vi = vertexIter++;
 		#else
+
+		int vert_counter = -1;
 		for (delaunay_t::Vertex_iterator vi=delaunay.vertices_begin(), vie=delaunay.vertices_end(); vi!=vie; ++vi) {
 		#endif
+			vert_counter++;
 			vert_info_t& vert(vi->info());
 			if (vert.views.IsEmpty())
 				continue;
@@ -965,7 +969,10 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, bool bU
 			#endif
 			const point_t& p(vi->point());
 			const Point3 pt(CGAL2MVS<REAL>(p));
+
+			int view_counter = -1;
 			FOREACH(v, vert.views) {
+				view_counter++;
 				const typename vert_info_t::view_t view(vert.views[v]);
 				const uint32_t imageID(view.idxView);
 				const edge_cap_t alpha_vis(view.weight);
@@ -979,8 +986,10 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, bool bU
 				intersection_t inter(pt, Point3(vecCamPoint*invLenCamPoint));
 				// find faces intersected by the camera-point segment
 				const segment_t segCamPoint(MVS2CGAL(camera.C), p);
-				if (!intersect(delaunay, segCamPoint, camCell.facets, facets, inter))
+				if (!intersect(delaunay, segCamPoint, camCell.facets, facets, inter)) {
 					continue;
+				}
+
 				do {
 					// assign score, weighted by the distance from the point to the intersection
 					const edge_cap_t w(alpha_vis*(1.f-EXP(-SQUARE((float)inter.dist)*inv2SigmaSq)));
@@ -1017,6 +1026,19 @@ bool Scene::ReconstructMesh(float distInsert, bool bUseFreeSpaceSupport, bool bU
 					#endif
 					f += w;
 				}
+
+				// if (vert_counter == 3011)
+				// {
+				// 	std::cerr << "\n";
+				// 	std::cerr << "imageID >> " << imageID << std::endl; 
+				// 	std::cerr << "camCell facets >> " << camCell.facets.size() << std::endl; 
+				// 	std::cerr << "segCamPoint >> " << segCamPoint.source().x() << " " << segCamPoint.source().y() << " "
+				// 			  << segCamPoint.target().x() << " " << segCamPoint.target().y() << std::endl; 
+				// 	std::cerr << "facets >> " << facets.size() << std::endl; 
+				// 	std::cerr << "camera center >> " << camera.C << std::endl; 
+				// 	std::cerr << vert.views.GetSize() << " " << vert_counter << " " << view_counter << " " << inter.type << std::endl;
+				// }
+
 				ASSERT(facets.empty() && inter.type == intersection_t::VERTEX && inter.v1 == vi);
 				#ifdef DELAUNAY_WEAKSURF
 				ASSERT(vert.viewsInfo[v].cell2End == NULL);

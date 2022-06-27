@@ -175,7 +175,6 @@ HRESULT CImageJPG::ReadHeader()
 		}
 		return _OK;
 	}
-
 	Close();
 	return _FAIL;
 } // ReadHeader

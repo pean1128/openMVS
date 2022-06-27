@@ -758,7 +758,6 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		nMinPointViews = nCalibratedImages;
 	unsigned nPoints = 0;
 	imageData.avgDepth = 0;
-
 	const float sigmaAngleSmall(-1.f/(2.f*SQUARE(fOptimAngle*0.38f)));
 	const float sigmaAngleLarge(-1.f/(2.f*SQUARE(fOptimAngle*0.7f)));
 	const bool bCheckInsideROI(nInsideROI > 0 && IsBounded());
@@ -767,17 +766,20 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		const PointCloud::ViewArr& views = pointcloud.pointViews[idx];
 		ASSERT(views.IsSorted());
 
-		//  如果views里面能找到ID
+		//  如果views里面能找不到ID, 跳过
 		if (views.FindFirst(ID) == PointCloud::ViewArr::NO_INDEX)
 			continue;
+
 		// store this point
 		const PointCloud::Point& point = pointcloud.points[idx];
 		float wROI(1.f);
 		if (bCheckInsideROI && !obb.Intersects(point)) {
 			if (nInsideROI > 1)
 				continue;
-			wROI = 0.7f;
+			// 不在obb里, 调低权重
+			wROI = 0.7f; 
 		}
+
 		// store this point
 		if (views.GetSize() >= nMinPointViews)
 			points.Insert((uint32_t)idx);
@@ -786,12 +788,15 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		++nPoints;
 		
 		// score shared views
+		// reference相机到这个点
 		const Point3f V1(imageData.camera.C - Cast<REAL>(point));
 		const float footprint1(Footprint(imageData.camera, point));
+		
 		for (const PointCloud::View& view: views) {
 			if (view == ID)
 				continue;
 			const Image& imageData2 = images[view];
+			// source相机到这个点
 			const Point3f V2(imageData2.camera.C - Cast<REAL>(point));
 			const float fAngle(ACOS(ComputeAngle<float,float>(V1.ptr(), V2.ptr())));
 			const float wAngle(EXP(SQUARE(fAngle-fOptimAngle)*(fAngle<fOptimAngle?sigmaAngleSmall:sigmaAngleLarge)));
@@ -812,7 +817,44 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 		}
 	}
 	imageData.avgDepth /= nPoints;
-	ASSERT(nPoints > 3);
+
+	// 当前的reference camera关联到三个以上的点
+	ASSERT(nPoints > 3); // 这里ASSERT没起作用
+
+	// // debug
+	// if (points.GetSize() <= 3)
+	// {
+	// 	std::cerr << points.GetSize() << " " << nPoints << std::endl;
+
+	// 	FOREACH(idx, pointcloud.points) {
+	// 		const PointCloud::ViewArr& views = pointcloud.pointViews[idx];
+	// 		ASSERT(views.IsSorted());
+
+	// 		//  如果views里面能找不到ID, 跳过
+	// 		if (views.FindFirst(ID) == PointCloud::ViewArr::NO_INDEX)
+	// 			continue;
+
+	// 		// store this point
+	// 		const PointCloud::Point& point = pointcloud.points[idx];
+	// 		float wROI(1.f);
+	// 		if (bCheckInsideROI && !obb.Intersects(point)) {
+	// 			if (nInsideROI > 1)
+	// 				continue;
+	// 			// 不在obb里, 调低权重
+	// 			wROI = 0.7f; 
+	// 		}
+
+	// 		// store this point
+	// 		if (views.GetSize() >= nMinPointViews) {
+	// 			std::cerr << "testing ... >> " << idx << " " << views.GetSize() << std::endl;
+	// 			points.Insert((uint32_t)idx);
+	// 		}
+
+	// 		imageData.avgDepth += (float)imageData.camera.PointDepth(point);
+	// 		++nPoints;
+	// 	}
+	// 	exit(-1);
+	// }
 
 	// select best neighborViews
 	Point2fArr projs(0, points.GetSize());
@@ -837,9 +879,13 @@ bool Scene::SelectNeighborViews(uint32_t ID, IndexArr& points, unsigned nMinView
 			const PointCloud::Point& point = pointcloud.points[idx];
 			Point2f& ptA = projs.AddConstruct(imageData.camera.ProjectPointP(point));
 			Point2f ptB = imageDataB.camera.ProjectPointP(point);
+
+			// 把points中不能被当前imageDataB观察到的点删除
 			if (!imageData.camera.IsInside(ptA, boundsA) || !imageDataB.camera.IsInside(ptB, boundsB))
 				projs.RemoveLast();
 		}
+
+		// score中会记录对应的camera观测到的合法点的数
 		ASSERT(projs.GetSize() <= score.points);
 		if (projs.IsEmpty())
 			continue;

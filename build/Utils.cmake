@@ -433,6 +433,7 @@ macro(optimize_default_compiler_settings)
 			endif()
 		endif()
 	endif()
+
 	if(CLANG AND (CMAKE_CXX_STANDARD EQUAL 11 OR CMAKE_CXX_STANDARD EQUAL 14 OR CMAKE_CXX_STANDARD EQUAL 17))
 		set(CMAKE_EXE_LINKER_FLAGS "-stdlib=libc++")
 		add_extra_compiler_option(-stdlib=libc++)
